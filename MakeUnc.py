@@ -113,26 +113,27 @@ class MakeUnc(object):
 
             if self.doNflh:
                 if 'nflh_unc' not in geoVar:
-                    print('nflh_unc there; creating variable...',flush=True)
+                    self.logger.info('nflh_unc there; creating variable...')
                     varNflhUnc = geoGr.createVariable('nflh_unc',
                                                       self.otherProdsDict['nflh_unc'].dtype,
                                                         self.dimsDict['nflh_unc'])
                     varNflhUnc.setncatts(self.attrOtherProdUncDict['nflh_unc'])
                 else:
-                    print('nflh_unc available, using existing variable...',
-                          flush=True)
+                    self.logger.info('nflh_unc available, using existing variable...')
                     varNflhUnc = geoVar['nflh_unc']
                 varNflhUnc[:] = self.otherProdsDict['nflh_unc']
+        self.logger.info("%s Processing Complete" % baseLineFname)
+        return None
 
-    def BuildUncs(self,noisySfx,verbose=False):
+    def BuildUncs(self,noisySfx):
         """"
         Calculates rrs uncertainty as st.dev of rrs. Note that to save time
             I use unperturbed rrs as the rrs average for the simulation
         """
         fBaseName = self.silFile.split('/')[-1].split('.')[0].split('_')[0]
         matchFilPatt = self.noisyDir +  fBaseName + '*' + noisySfx + '*'
-        if verbose:
-            print ("searching for " + matchFilPatt)
+        if self.verbose:
+            self.logger.info("searching for %s..." % matchFilPatt)
         firstPass = [True] * len(self.bands)
         flis = glob.glob(matchFilPatt)
         lflis = len(flis)
@@ -146,11 +147,11 @@ class MakeUnc(object):
         #process noisy data
         for fcount,fname in enumerate(flis):
             prcDone = 100 * fcount / (lflis - 1)
-            if verbose:
-                print("\rLoading and reading %s -- %.1f%%" %
-                                                    (fname,prcDone),end='',flush=True)
+            if self.verbose:
+                self.logger.info("Loading and reading %s -- %.1f%%" %
+                                                    (fname,prcDone))
             else:
-                print("\r%.1f%%" % prcDone,end='',flush=True)
+                self.logger.info("\r%.1f%%" % prcDone)
             with nc.Dataset(fname) as nds:
                 nGeoGr = nds.groups['geophysical_data']
                 nGeoVar = nGeoGr.variables
@@ -187,8 +188,8 @@ class MakeUnc(object):
                         break
 
         for band in self.bands:
-            if verbose:
-                print("\n...computing stdev for band",band,flush=True)
+            if self.verbose:
+                self.logger.info("\n...computing stdev for band %s" % band)
             self.rrsUncArrDict[band] = np.ma.sqrt(rrsAggDataDict[band] / lflis)
             if self.doSaniCheck:
                 self.ltUncArrDict[band] = np.sqrt(ltAggDataDict[band] / lflis)
@@ -196,8 +197,9 @@ class MakeUnc(object):
                 self.otherProdsDict['chlor_a_unc'] = np.ma.sqrt(chlAggDataArr / lflis)
             if self.doNflh:
                 self.otherProdsDict['nflh_unc'] = np.ma.sqrt(nflhAggDataArr / lflis)
-        if verbose:
-            print("\nProcessed %d files " % lflis)
+        if self.verbose:
+            self.logger.info("\nProcessed %d files " % lflis)
+        return None
 
     def ReadFromSilent(self):
         '''Reads Baseline file
@@ -254,7 +256,7 @@ class MakeUnc(object):
                                                     'add_offset':nflh.add_offset}
                 self.dimsDict['nflh_unc'] = nflh.dimensions
                 self.dTypeDict['nflh_unc'] = nflh.dtype
-
+        return None
 class MakeSwfUnc(MakeUnc):
     """Uncertainty subclass for SeaWiFS"""
     def __init__(self,*args,**kwargs):
@@ -265,6 +267,7 @@ class MakeSwfUnc(MakeUnc):
                         '510':'#228844','555':'#667722','670':'#aa2211',
                         '765':'#770500','865':'#440000'}
         super(MakeSwfUnc,self).__init__(*args,**kwargs)
+        return None
 
 class MakeHMA(MakeUnc):
     """Uncertainty engine for HMODISA"""
@@ -274,6 +277,7 @@ class MakeHMA(MakeUnc):
                                 ['412','443','488','531','547','555','645','667',
                                  '678','748','859','869','1240','1640','2130'])
         super(MakeHMA,self).__init__(*args,**kwargs)
+        return None
 
 def Main(argv):
     parser = argparse.ArgumentParser()
@@ -299,6 +303,7 @@ def Main(argv):
     if noisyDataDir[-1] != '/':
         noisyDataDir += '/'
     if baseLineFname[0] == 'S':
+
         uncObj = MakeSwfUnc(baseLineFile,noisyDataDir,verbose=pArgs.verbose)
     elif baseLineFname[0] == 'A':
         uncObj = MakeHMA(baseLineFile, noisyDataDir, doChla=pArgs.dochl,
@@ -306,7 +311,6 @@ def Main(argv):
     uncObj.ReadFromSilent()
     uncObj.BuildUncs(noisySfx,verbose=pArgs.verbose)
     uncObj.WriteToSilent()
-    print("DONE!")
 
 if __name__ == "__main__":
 
