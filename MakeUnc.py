@@ -232,7 +232,7 @@ class MakeUnc(object):
                                                     '_FillValue': nflh._FillValue,
                                                     'units': nflh.units,
                                                     'scale_factor':nflh.scale_factor,
-                                                    'add_offset',:nflh.add_offset}
+                                                    'add_offset':nflh.add_offset}
                 self.dimsDict['nflh_unc'] = nflh.dimensions
                 self.dTypeDict['nflh_unc'] = nflh.dtype
 
