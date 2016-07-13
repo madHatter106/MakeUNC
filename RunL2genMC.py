@@ -5,6 +5,7 @@ import multiprocessing as mp
 import argparse
 from itertools import islice
 from datetime import datetime as dt
+from MakeUNC import MakeUnc
 
 class MCRunner():
     '''
@@ -149,6 +150,16 @@ class BatchManager():
                 del mcr # make room for the next mc set
         return None
 
+
+class StreamManager():
+    '''
+    Class to manage complete uncertainty generation; from processing of L1As to
+    creation of uncertainty from noisy L2 files, to the final packing of new
+    uncertainty products into the baseline L2.
+
+    Dependency: MakeUnc.
+    '''
+
 def Main(args):
     parser = argparse.ArgumentParser()
     parser.add_argument('-i','--ifile',help='l1a input file',
@@ -167,6 +178,9 @@ def Main(args):
                         action='store_true')
     parser.add_argument('-b','--batch', help='batch processing',
                         action='store_true')
+    parser.add_argument('-c','--complete',
+                        help='from L1As to unc. packed into baseline L2',
+                        action='store_true')
     parsedArgs = parser.parse_args(args)
     if parsedArgs.batch:
         bcr = BatchManager(parsedArgs)
@@ -177,9 +191,13 @@ def Main(args):
         # Process Silent file
         taskList = mcr.GetCmdList()
         mcr.Runner(taskList)
-        pickle.dump(mcr,
-                    open(os.path.join(mcr.l2MainPath,'mcr_%s.pkl' % mcr.basename)
-                    ,'wb'))
+        if parsedArgs.complete:
+            # analyze ifile to determine sensor
+            # initialize instance of appropriate subclass
+            # ReadFromSilent
+            # BuildUncs
+            # WriteToSilent
+            pass
 
 if __name__ == '__main__':
     Main(sys.argv[1:])
