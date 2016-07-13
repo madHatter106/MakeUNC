@@ -257,19 +257,35 @@ class MakeHMA(MakeUnc):
         super(MakeHMA,self).__init__(*args,**kwargs)
 
 def Main(argv):
-
-    baseLineFile = argv[0]
-    noisyDataDir = argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--ifile', help='Initial L2 file path.',
+                        type=str, required='True')
+    parser.add_argument('-n', '--npath', help='Path to noisy data directory.',
+                        type=str, required='True')
+    parser.add_argument('-s', '--nsfx',
+                        help='Noisy file suffix for pattern matching.',
+                        type=str, default='_noisy_')
+    parser.add_argument('-c', '--dochl', help='Compute chloropyll uncertainty.',
+                        action='store_true')
+    parser.add_argument('-f', '--doflh',
+                        help='Compute normalized fluorescence line height.',
+                        action='store_true')
+    parser.add_argument('-v','--verbose',help='Augment output verbosity',
+                        action='store_true')
+    pArgs = parser.parse_args(argv)
+    baseLineFile = pArgs.ifile
+    noisyDataDir = pArgs.npath
+    noisySfx = pArgs.nsfx
     baseLineFname = baseLineFile.split('/')[-1]
-    noisySfx = '_noisy_'
     if noisyDataDir[-1] != '/':
         noisyDataDir += '/'
     if baseLineFname[0] == 'S':
         uncObj = MakeSwfUnc(baseLineFile,noisyDataDir)
     elif baseLineFname[0] == 'A':
-        uncObj = MakeHMA(baseLineFile,noisyDataDir,doChla=True,doNflh=True)
+        uncObj = MakeHMA(baseLineFile, noisyDataDir, doChla=pArgs.dochl,
+                        doNflh=pArgs.doflh)
     uncObj.ReadFromSilent()
-    uncObj.BuildUncs(noisySfx,verbose=True)
+    uncObj.BuildUncs(noisySfx,verbose=pArgs.verbose)
     uncObj.WriteToSilent()
     print("DONE!")
 
