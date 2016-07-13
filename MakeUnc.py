@@ -10,6 +10,8 @@ import glob
 import sys
 import re
 import argparse
+import logging
+import datetime as dt
 
 class MakeUnc(object):
     """
@@ -27,6 +29,8 @@ class MakeUnc(object):
 
     """
     def __init__(self,silFile,noisyDir,**kwargs):
+        self.verbose = kwargs.pop('verbose',False)
+        self._SetLogger()
         self.silFile = silFile
         self.noisyDir = noisyDir
         self.fnum = kwargs.pop("fnum",None)
@@ -55,6 +59,21 @@ class MakeUnc(object):
             self.attrOtherProdUncDict = dict.fromkeys(attrUncKeys)
             self.dTypeDict.update(dict.fromkeys(attrUncKeys))
             self.dimsDict.update(dict.fromkeys(attrUncKeys))
+
+    def _SetLogger(self):
+        self.logger = logging.getLogger(__name__)
+        logfilename = './MakeUnc' + str(dt.datetime.now())
+        fh = logging.FileHandler(logfilename,mode='w')
+        if self.verbose:
+            formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s, %(funcName)s, %(lineno)d: %(message)s')
+            fh.setLevel(logging.DEBUG)
+        else:
+            formatter = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+            fh.setLevel(logging.INFO)
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+        self.logger.info('Logger initialized')
+        return None
 
     def WriteToSilent(self):
         # first create NC variables if necessary
@@ -280,10 +299,10 @@ def Main(argv):
     if noisyDataDir[-1] != '/':
         noisyDataDir += '/'
     if baseLineFname[0] == 'S':
-        uncObj = MakeSwfUnc(baseLineFile,noisyDataDir)
+        uncObj = MakeSwfUnc(baseLineFile,noisyDataDir,verbose=pArgs.verbose)
     elif baseLineFname[0] == 'A':
         uncObj = MakeHMA(baseLineFile, noisyDataDir, doChla=pArgs.dochl,
-                        doNflh=pArgs.doflh)
+                        doNflh=pArgs.doflh,verbose=pArgs.verbose)
     uncObj.ReadFromSilent()
     uncObj.BuildUncs(noisySfx,verbose=pArgs.verbose)
     uncObj.WriteToSilent()
