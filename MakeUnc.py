@@ -257,6 +257,7 @@ class MakeUnc(object):
                 self.dimsDict['nflh_unc'] = nflh.dimensions
                 self.dTypeDict['nflh_unc'] = nflh.dtype
         return None
+
 class MakeSwfUnc(MakeUnc):
     """Uncertainty subclass for SeaWiFS"""
     def __init__(self,*args,**kwargs):
