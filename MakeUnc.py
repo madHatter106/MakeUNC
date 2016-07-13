@@ -278,6 +278,9 @@ class MakeHMA(MakeUnc):
                                 ['412','443','488','531','547','555','645','667',
                                  '678','748','859','869','1240','1640','2130'])
         super(MakeHMA,self).__init__(*args,**kwargs)
+        self.colDict = {'412':'#001166','443':'#004488','488':'#1166FF',
+                        '531':'#337722','547':'#557733','555':'#669922',
+                        '645':'#883311','667':'#aa2211','678':'#dd3300'}
         return None
 
 def Main(argv):
@@ -304,7 +307,6 @@ def Main(argv):
     if noisyDataDir[-1] != '/':
         noisyDataDir += '/'
     if baseLineFname[0] == 'S':
-
         uncObj = MakeSwfUnc(baseLineFile,noisyDataDir,verbose=pArgs.verbose)
     elif baseLineFname[0] == 'A':
         uncObj = MakeHMA(baseLineFile, noisyDataDir, doChla=pArgs.dochl,
