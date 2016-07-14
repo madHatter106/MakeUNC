@@ -197,7 +197,9 @@ def Main(args):
             # ReadFromSilent
             # BuildUncs
             # WriteToSilent
-            pass
+            uncObj.ReadFromSilent()
+            uncObj.BuildUncs(pArgs.nsfx)
+            uncObj.WriteToSilent()
 
 if __name__ == '__main__':
     Main(sys.argv[1:])
