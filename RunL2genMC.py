@@ -155,44 +155,6 @@ class CBatchManager():
         pArgs = CNamespace(**kwargs)
         return pArgs
 
-    def ProcessUncL2(self):
-        '''
-        Processes L2 Files following MC Simulation. For Now I assume SWF
-        '''
-        # create generator of L2 paths to process
-        patt2Match = os.path.join(self.l2MainPath,'S*/')
-        pattGen = glob.iglob(patt2Match)
-        fiPat = re.compile('(S[0-9]+)')
-        noisySfx = '_noisy_'
-        for dr in pattMatchGen:
-            if os.path.isdir(dr):
-                basePath = fiPat.findall(dr)[0]
-                l2Pa = os.path.join(self.l2MainPath,basePath)
-                silFiPa = os.path.join(l2Pa,basePath) + '_silent.L2'
-                noiDiPa = os.path.join(l2Pa,'Noisy/')
-                if os.path.exists(silFiPa) and os.path.exists(noiDiPa):
-                    #pArgs = CNamespace(ifile=silFiPa, npath=noiDiPa)
-                else:
-                    # log error
-                    pass
-                uncProcObj = MakeUnc.MakeSwfUnc(silFiPa,noiDiPa)
-                uncProcObj.BuildUncs(noisySfx)
-                uncProcObj.WriteToSilent()
-                #del pArgs
-
-    def MkUncCmdGen(self):
-
-        yield cmd
-    def MkUncCmdRunner(self):
-class StreamManager():
-    '''
-    Class to manage complete uncertainty generation; from processing of L1As to
-    creation of uncertainty from noisy L2 files, to the final packing of new
-    uncertainty products into the baseline L2.
-
-    Dependency: MakeUnc.
-    '''
-
 def ParseCommandLine(args):
     '''
     Returns argparse object with parsed arguments as attributes
