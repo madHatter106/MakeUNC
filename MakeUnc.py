@@ -307,7 +307,7 @@ def Main(argv):
     if noisyDataDir[-1] != '/':
         noisyDataDir += '/'
     if baseLineFname[0] == 'S':
-        uncObj = MakeSwfUnc(baseLineFile,noisyDataDir,verbose=pArgs.verbose)
+        uncObj = MakeSwfUnc(pArgs.ifile,pArgs.npath,verbose=pArgs.verbose)
     elif baseLineFname[0] == 'A':
         uncObj = MakeHMA(baseLineFile, noisyDataDir, doChla=pArgs.dochl,
                         doNflh=pArgs.doflh,verbose=pArgs.verbose)

@@ -7,7 +7,7 @@ from itertools import islice
 from datetime import datetime as dt
 from MakeUNC import MakeUnc
 
-class MCRunner():
+class CMCRunner():
     '''
     Class to run l2gen monte carlo process, by default in parallel.
     Creates silent/noisy files  in the appropriate directories for later use
@@ -15,7 +15,7 @@ class MCRunner():
     '''
     def __init__(self,pArgs):
         '''
-        Takes command line arguments parsed by the argparse module.
+        Takes pre-parsed command line arguments.
         '''
         maxProcs = (mp.cpu_count() - 1 ) * 2
         if pArgs.workers > maxProcs:
@@ -49,7 +49,7 @@ class MCRunner():
 
     def _GetL2FilePath(self):
         '''
-        Handles path handling and where necessary directory creation.
+        Path handling and where necessary directory creation.
         '''
         pattern = '(S[0-9]+).L1A'
         basename = re.findall(pattern,self.l1path)[0]
@@ -105,7 +105,7 @@ class MCRunner():
         return status
 
 
-class Namespace():
+class CNamespace():
     '''
     Class to replace command line argument parser for IPython calls.
     Usage: args=Namespace(ifile='',opath='',prsil='',prnoi='')
@@ -113,9 +113,9 @@ class Namespace():
 
     def __init__(self,**kwargs):
         self.__dict__.update(kwargs)
+        return None
 
-
-class BatchManager():
+class CBatchManager():
     '''
     Class to manage batch processing of multiple L1A files by the MCRunner.
     '''
@@ -129,6 +129,7 @@ class BatchManager():
             self.pArgs = bArgs
             self.verbose =self.pArgs.verbose
             self.l2MainPath = self.pArgs.opath
+
             if self.verbose:
                 self.logMeta = os.path.join(self.l2MainPath,'Meta.log')
 
@@ -150,7 +151,39 @@ class BatchManager():
                 del mcr # make room for the next mc set
         return None
 
+    def CreateMakeUNCArgs(**kwargs):
+        pArgs = CNamespace(**kwargs)
+        return pArgs
 
+    def ProcessUncL2(self):
+        '''
+        Processes L2 Files following MC Simulation. For Now I assume SWF
+        '''
+        # create generator of L2 paths to process
+        patt2Match = os.path.join(self.l2MainPath,'S*/')
+        pattGen = glob.iglob(patt2Match)
+        fiPat = re.compile('(S[0-9]+)')
+        noisySfx = '_noisy_'
+        for dr in pattMatchGen:
+            if os.path.isdir(dr):
+                basePath = fiPat.findall(dr)[0]
+                l2Pa = os.path.join(self.l2MainPath,basePath)
+                silFiPa = os.path.join(l2Pa,basePath) + '_silent.L2'
+                noiDiPa = os.path.join(l2Pa,'Noisy/')
+                if os.path.exists(silFiPa) and os.path.exists(noiDiPa):
+                    #pArgs = CNamespace(ifile=silFiPa, npath=noiDiPa)
+                else:
+                    # log error
+                    pass
+                uncProcObj = MakeUnc.MakeSwfUnc(silFiPa,noiDiPa)
+                uncProcObj.BuildUncs(noisySfx)
+                uncProcObj.WriteToSilent()
+                #del pArgs
+
+    def MkUncCmdGen(self):
+
+        yield cmd
+    def MkUncCmdRunner(self):
 class StreamManager():
     '''
     Class to manage complete uncertainty generation; from processing of L1As to
@@ -160,7 +193,10 @@ class StreamManager():
     Dependency: MakeUnc.
     '''
 
-def Main(args):
+def ParseCommandLine(args):
+    '''
+    Returns argparse object with parsed arguments as attributes
+    '''
     parser = argparse.ArgumentParser()
     parser.add_argument('-i','--ifile',help='l1a input file',
                         type=str,required='True')
@@ -182,12 +218,18 @@ def Main(args):
                         help='from L1As to unc. packed into baseline L2',
                         action='store_true')
     parsedArgs = parser.parse_args(args)
-    if parsedArgs.batch:
-        bcr = BatchManager(parsedArgs)
+    return parsedArgs
+
+def Main(args):
+
+    pArgs = ParseCommandLine(args)
+
+    if pArgs.batch:
+        bcr = CBatchManager(pArgs)
         bcr.ProcessL1A()
     else:
         #Init MCRUnner Object, passing the args
-        mcr = MCRunner(parsedArgs)
+        mcr = CMCRunner(parsedArgs)
         # Process Silent file
         taskList = mcr.GetCmdList()
         mcr.Runner(taskList)
