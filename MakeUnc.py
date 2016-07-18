@@ -6,9 +6,7 @@ script to run analytic uncertainty analysis of rrs data
 """
 import numpy as np
 import netCDF4 as nc
-import glob
-import sys
-import re
+import glob,sys,os,re
 import argparse
 import logging
 import datetime as dt
@@ -305,7 +303,7 @@ class CBatchManager():
         self.l2PathsGen = glob.iglob(matchPattern)
         return None
 
-    def PathsGen(self):
+    def _PathsGen(self):
         spatt=re.compile('(S[0-9]+)')
         for l2path in self.l2PathsGen:
             if os.path.isdir(l2path):
@@ -316,20 +314,20 @@ class CBatchManager():
             else:
                 #log error
                 continue
-            yield silFiPa,noiDiPa
+            yield [silFiPa,noiDiPa]
 
-    def BatchRun(self,sArgs):
+    def _BatchRun(self,sArgs):
         ifile,npath = sArgs
         uncObj = MakeSwfUnc(ifile,npath)
         uncObj.ReadFromSilent()
         uncObj.BuildUncs(self.pArgs.nsfx)
         uncObj.WriteToSilent()
-        return None
+        return uncObj.silFile
 
     def ProcessL2s(self):
-        paramGen = (params for params in PathsGen)
+        paramGen = (params for params in self._PathsGen())
         pool = mp.Pool(self.pArgs.workers)
-        results = pool.map(BatchRun,paramGen)
+        results = pool.map(self._BatchRun,paramGen)
         return results # temporary should be replaced by log entry
 
 
