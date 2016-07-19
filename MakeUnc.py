@@ -1,3 +1,4 @@
+#!/disk01/home/ekarakoy/anaconda3/bin/python
 # -*- coding: utf-8 -*-
 """
 Created on Mon Nov  2 15:09:44 2015
@@ -11,6 +12,7 @@ import argparse
 import logging
 import datetime as dt
 import multiprocessing as mp
+import pickle
 
 class MakeUnc(object):
     """
@@ -368,7 +370,7 @@ def Main(argv):
     pArgs = ParseCommandLine(argv)
     if pArgs.batch:
         # min. cmd line is ipath for main L2Path (all L2s should be in a
-        # common directory. )
+        # common directory. ) and -b
         bRunner = CBatchManager(pArgs)
         res = bRunner.ProcessL2s()
         pickle.dump(open('L2BatchList.pkl','wb'))
