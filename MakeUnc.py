@@ -1,3 +1,4 @@
+#!/disk01/home/ekarakoy/anaconda3/bin/python
 # -*- coding: utf-8 -*-
 """
 Created on Mon Nov  2 15:09:44 2015
@@ -11,6 +12,7 @@ import argparse
 import logging
 import datetime as dt
 import multiprocessing as mp
+import pickle
 
 class MakeUnc(object):
     """
@@ -357,6 +359,9 @@ def ParseCommandLine(args):
                         action='store_true')
     parser.add_argument('-w','--workers',help='Number of concurrent processes.',
                         type=int, default=1)
+    parser.add_argument('-z','--sensor',
+                        help='Specify sensor data originates from.',
+                        type=str,default='SeaWiFS')
     parsedArgs = parser.parse_args(args)
     return parsedArgs
 
@@ -364,7 +369,11 @@ def Main(argv):
 
     pArgs = ParseCommandLine(argv)
     if pArgs.batch:
-        pass
+        # min. cmd line is ipath for main L2Path (all L2s should be in a
+        # common directory. ) and -b
+        bRunner = CBatchManager(pArgs)
+        res = bRunner.ProcessL2s()
+        pickle.dump(open('L2BatchList.pkl','wb'))
     else:
         baseLineFile = pArgs.ifile
         noisyDataDir = pArgs.npath
