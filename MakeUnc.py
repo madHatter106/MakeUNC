@@ -6,10 +6,11 @@ script to run analytic uncertainty analysis of rrs data
 """
 import numpy as np
 import netCDF4 as nc
-import glob
-import sys
-import re
+import glob,sys,os,re
 import argparse
+import logging
+import datetime as dt
+import multiprocessing as mp
 
 class MakeUnc(object):
     """
@@ -27,6 +28,8 @@ class MakeUnc(object):
 
     """
     def __init__(self,silFile,noisyDir,**kwargs):
+        self.verbose = kwargs.pop('verbose',False)
+        self._SetLogger()
         self.silFile = silFile
         self.noisyDir = noisyDir
         self.fnum = kwargs.pop("fnum",None)
@@ -55,6 +58,21 @@ class MakeUnc(object):
             self.attrOtherProdUncDict = dict.fromkeys(attrUncKeys)
             self.dTypeDict.update(dict.fromkeys(attrUncKeys))
             self.dimsDict.update(dict.fromkeys(attrUncKeys))
+
+    def _SetLogger(self):
+        self.logger = logging.getLogger(__name__)
+        logfilename = './MakeUnc' + str(dt.datetime.now())
+        fh = logging.FileHandler(logfilename,mode='w')
+        if self.verbose:
+            formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s, %(funcName)s, %(lineno)d: %(message)s')
+            fh.setLevel(logging.DEBUG)
+        else:
+            formatter = logging.Formatter('%(asctime)s [%(levelname)s]: %(message)s')
+            fh.setLevel(logging.INFO)
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
+        self.logger.info('Logger initialized')
+        return None
 
     def WriteToSilent(self):
         # first create NC variables if necessary
@@ -94,26 +112,27 @@ class MakeUnc(object):
 
             if self.doNflh:
                 if 'nflh_unc' not in geoVar:
-                    print('nflh_unc there; creating variable...',flush=True)
+                    self.logger.info('nflh_unc there; creating variable...')
                     varNflhUnc = geoGr.createVariable('nflh_unc',
                                                       self.otherProdsDict['nflh_unc'].dtype,
                                                         self.dimsDict['nflh_unc'])
                     varNflhUnc.setncatts(self.attrOtherProdUncDict['nflh_unc'])
                 else:
-                    print('nflh_unc available, using existing variable...',
-                          flush=True)
+                    self.logger.info('nflh_unc available, using existing variable...')
                     varNflhUnc = geoVar['nflh_unc']
                 varNflhUnc[:] = self.otherProdsDict['nflh_unc']
+        #self.logger.info("%s Processing Complete" % baseLineFname)
+        return None
 
-    def BuildUncs(self,noisySfx,verbose=False):
+    def BuildUncs(self,noisySfx):
         """"
         Calculates rrs uncertainty as st.dev of rrs. Note that to save time
             I use unperturbed rrs as the rrs average for the simulation
         """
         fBaseName = self.silFile.split('/')[-1].split('.')[0].split('_')[0]
         matchFilPatt = self.noisyDir +  fBaseName + '*' + noisySfx + '*'
-        if verbose:
-            print ("searching for " + matchFilPatt)
+        if self.verbose:
+            self.logger.info("searching for %s..." % matchFilPatt)
         firstPass = [True] * len(self.bands)
         flis = glob.glob(matchFilPatt)
         lflis = len(flis)
@@ -127,11 +146,11 @@ class MakeUnc(object):
         #process noisy data
         for fcount,fname in enumerate(flis):
             prcDone = 100 * fcount / (lflis - 1)
-            if verbose:
-                print("\rLoading and reading %s -- %.1f%%" %
-                                                    (fname,prcDone),end='',flush=True)
+            if self.verbose:
+                self.logger.info("Loading and reading %s -- %.1f%%" %
+                                                    (fname,prcDone))
             else:
-                print("\r%.1f%%" % prcDone,end='',flush=True)
+                self.logger.info("\r%.1f%%" % prcDone)
             with nc.Dataset(fname) as nds:
                 nGeoGr = nds.groups['geophysical_data']
                 nGeoVar = nGeoGr.variables
@@ -152,7 +171,7 @@ class MakeUnc(object):
                         if self.doNflh:
                             nflhAggDataArr = (noisyNflh - self.otherProdsDict['nflh']) ** 2
                         firstPass[i] = False
-                        if verbose:
+                        if self.verbose:
                             print("\nFirst pass complete for band %s" % band,end='...',flush=True)
                     else:
                         rrsAggDataDict[band] += (noisyRrs - self.rrsSilDict[band]) ** 2
@@ -168,8 +187,8 @@ class MakeUnc(object):
                         break
 
         for band in self.bands:
-            if verbose:
-                print("\n...computing stdev for band",band,flush=True)
+            if self.verbose:
+                self.logger.info("\n...computing stdev for band %s" % band)
             self.rrsUncArrDict[band] = np.ma.sqrt(rrsAggDataDict[band] / lflis)
             if self.doSaniCheck:
                 self.ltUncArrDict[band] = np.sqrt(ltAggDataDict[band] / lflis)
@@ -177,8 +196,9 @@ class MakeUnc(object):
                 self.otherProdsDict['chlor_a_unc'] = np.ma.sqrt(chlAggDataArr / lflis)
             if self.doNflh:
                 self.otherProdsDict['nflh_unc'] = np.ma.sqrt(nflhAggDataArr / lflis)
-        if verbose:
-            print("\nProcessed %d files " % lflis)
+        if self.verbose:
+            self.logger.info("\nProcessed %d files " % lflis)
+        return None
 
     def ReadFromSilent(self):
         '''Reads Baseline file
@@ -235,6 +255,7 @@ class MakeUnc(object):
                                                     'add_offset':nflh.add_offset}
                 self.dimsDict['nflh_unc'] = nflh.dimensions
                 self.dTypeDict['nflh_unc'] = nflh.dtype
+        return None
 
 class MakeSwfUnc(MakeUnc):
     """Uncertainty subclass for SeaWiFS"""
@@ -246,6 +267,9 @@ class MakeSwfUnc(MakeUnc):
                         '510':'#228844','555':'#667722','670':'#aa2211',
                         '765':'#770500','865':'#440000'}
         super(MakeSwfUnc,self).__init__(*args,**kwargs)
+        return None
+
+
 
 class MakeHMA(MakeUnc):
     """Uncertainty engine for HMODISA"""
@@ -255,23 +279,107 @@ class MakeHMA(MakeUnc):
                                 ['412','443','488','531','547','555','645','667',
                                  '678','748','859','869','1240','1640','2130'])
         super(MakeHMA,self).__init__(*args,**kwargs)
+        self.colDict = {'412':'#001166','443':'#004488','488':'#1166FF',
+                        '531':'#337722','547':'#557733','555':'#669922',
+                        '645':'#883311','667':'#aa2211','678':'#dd3300'}
+        return None
+
+
+
+def PathsGen(matchPattern,l2MainPath):
+    # create generator of l2 directory paths
+    l2PathsGen = glob.iglob(matchPattern)
+    spatt=re.compile('(S[0-9]+)')
+    for l2path in l2PathsGen:
+        if os.path.isdir(l2path):
+            basename=spatt.findall(l2path)[0]
+            l2Pa = os.path.join(l2MainPath,basename)
+            silFiPa = os.path.join(l2Pa,basename) + '_silent.L2'
+            noiDiPa = os.path.join(l2Pa,'Noisy/')
+        else:
+            #log error
+            continue
+        yield [silFiPa,noiDiPa]
+
+class CBatchManager():
+    '''
+    Class to manage complete uncertainty generation; from processing of L1As to
+    creation of uncertainty from noisy L2 files, to the final packing of new
+    uncertainty products into the baseline L2.
+    '''
+
+    def __init__(self,pArgs):
+        '''
+        Takes a directory containing L2 directories
+        '''
+        self.pArgs = pArgs
+        self.l2MainPath = pArgs.ipath
+        if self.pArgs.sensor == 'SeaWiFS':
+            self.matchPattern = os.path.join(self.l2MainPath,'S*/')
+            basePat = re.compile('(S[0-9]+)')
+
+        return None
+
+    def _BatchRun(self,sArgs):
+        ifile,npath = sArgs
+        uncObj = MakeSwfUnc(ifile,npath)
+        uncObj.ReadFromSilent()
+        uncObj.BuildUncs(self.pArgs.nsfx)
+        uncObj.WriteToSilent()
+        return uncObj.silFile
+
+    def ProcessL2s(self):
+        paramGen = (params for params in PathsGen(self.matchPattern,
+                                                    self.l2MainPath))
+        with mp.Pool() as pool:
+            results = pool.map(self._BatchRun,paramGen)
+        return results # temporary: should be replaced by log entry
+
+def ParseCommandLine(args):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--ifile', help='Initial L2 file path.',
+                        type=str)
+    parser.add_argument('-j','--ipath',help='Main L2 path for batch processing.',
+                        type=str)
+    parser.add_argument('-n', '--npath', help='Path to noisy data directory.',
+                        type=str)
+    parser.add_argument('-s', '--nsfx',
+                        help='Noisy file suffix for pattern matching.',
+                        type=str, default='_noisy_')
+    parser.add_argument('-c', '--dochl', help='Compute chloropyll uncertainty.',
+                        action='store_true')
+    parser.add_argument('-f', '--doflh',
+                        help='Compute normalized fluorescence line height.',
+                        action='store_true')
+    parser.add_argument('-v','--verbose',help='Augment output verbosity',
+                        action='store_true')
+    parser.add_argument('-b','--batch',help='Batch processing option.',
+                        action='store_true')
+    parser.add_argument('-w','--workers',help='Number of concurrent processes.',
+                        type=int, default=1)
+    parsedArgs = parser.parse_args(args)
+    return parsedArgs
 
 def Main(argv):
 
-    baseLineFile = argv[0]
-    noisyDataDir = argv[1]
-    baseLineFname = baseLineFile.split('/')[-1]
-    noisySfx = '_noisy_'
-    if noisyDataDir[-1] != '/':
-        noisyDataDir += '/'
-    if baseLineFname[0] == 'S':
-        uncObj = MakeSwfUnc(baseLineFile,noisyDataDir)
-    elif baseLineFname[0] == 'A':
-        uncObj = MakeHMA(baseLineFile,noisyDataDir,doChla=True,doNflh=True)
-    uncObj.ReadFromSilent()
-    uncObj.BuildUncs(noisySfx,verbose=True)
-    uncObj.WriteToSilent()
-    print("DONE!")
+    pArgs = ParseCommandLine(argv)
+    if pArgs.batch:
+        pass
+    else:
+        baseLineFile = pArgs.ifile
+        noisyDataDir = pArgs.npath
+        noisySfx = pArgs.nsfx
+        baseLineFname = baseLineFile.split('/')[-1]
+        if noisyDataDir[-1] != '/':
+            noisyDataDir += '/'
+        if baseLineFname[0] == 'S':
+            uncObj = MakeSwfUnc(pArgs.ifile,pArgs.npath,verbose=pArgs.verbose)
+        elif baseLineFname[0] == 'A':
+            uncObj = MakeHMA(baseLineFile, noisyDataDir, doChla=pArgs.dochl,
+                            doNflh=pArgs.doflh,verbose=pArgs.verbose)
+        uncObj.ReadFromSilent()
+        uncObj.BuildUncs(noisySfx,verbose=pArgs.verbose)
+        uncObj.WriteToSilent()
 
 if __name__ == "__main__":
 
