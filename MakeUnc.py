@@ -284,6 +284,21 @@ class MakeHMA(MakeUnc):
                         '645':'#883311','667':'#aa2211','678':'#dd3300'}
         return None
 
+
+
+def PathsGen(l2PathsGen,l2MainPath):
+    spatt=re.compile('(S[0-9]+)')
+    for l2path in l2PathsGen:
+        if os.path.isdir(l2path):
+            basename=spatt.findall(l2path)[0]
+            l2Pa = os.path.join(l2MainPath,basename)
+            silFiPa = os.path.join(l2Pa,basename) + '_silent.L2'
+            noiDiPa = os.path.join(l2Pa,'Noisy/')
+        else:
+            #log error
+            continue
+        yield [silFiPa,noiDiPa]
+
 class CBatchManager():
     '''
     Class to manage complete uncertainty generation; from processing of L1As to
@@ -300,21 +315,9 @@ class CBatchManager():
         if self.pArgs.sensor == 'SeaWiFS':
             matchPattern = os.path.join(self.l2MainPath,'S*/')
             basePat = re.compile('(S[0-9]+)')
+        # create generator of l2 directory paths
         self.l2PathsGen = glob.iglob(matchPattern)
         return None
-
-    def _PathsGen(self):
-        spatt=re.compile('(S[0-9]+)')
-        for l2path in self.l2PathsGen:
-            if os.path.isdir(l2path):
-                basename=spatt.findall(l2path)[0]
-                l2Pa = os.path.join(self.l2MainPath,basename)
-                silFiPa = os.path.join(l2Pa,basename) + '_silent.L2'
-                noiDiPa = os.path.join(l2Pa,'Noisy/')
-            else:
-                #log error
-                continue
-            yield [silFiPa,noiDiPa]
 
     def _BatchRun(self,sArgs):
         ifile,npath = sArgs
@@ -325,10 +328,11 @@ class CBatchManager():
         return uncObj.silFile
 
     def ProcessL2s(self):
-        paramGen = (params for params in self._PathsGen())
-        pool = mp.Pool(self.pArgs.workers)
-        results = pool.map(self._BatchRun,paramGen)
-        return results # temporary should be replaced by log entry
+        paramGen = (params for params in PathsGen(self.l2PathsGen,
+                                                    self.l2MainPath))
+        with mp.Pool() as pool:
+            results = pool.map(self._BatchRun,paramGen)
+        return results # temporary: should be replaced by log entry
 
 
 def ParseCommandLine(args):
