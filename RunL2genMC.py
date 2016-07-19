@@ -137,7 +137,7 @@ class CBatchManager():
         '''Calls L1AGenerator to get next file to process'''
         for ifile in self.ifileGen:
             self.pArgs.ifile = ifile
-            mcr = MCRunner(self.pArgs)
+            mcr = CMCRunner(self.pArgs)
             pickle.dump(mcr,open(os.path.join(mcr.l2MainPath,'mcr_%s.pkl'
                                                 % mcr.basename), 'wb'))
             cmdGen = mcr.GetCmdList()

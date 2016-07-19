@@ -373,7 +373,7 @@ def Main(argv):
         # common directory. ) and -b
         bRunner = CBatchManager(pArgs)
         res = bRunner.ProcessL2s()
-        pickle.dump(open('L2BatchList.pkl','wb'))
+        pickle.dump(res,open('L2BatchList.pkl','wb'))
     else:
         baseLineFile = pArgs.ifile
         noisyDataDir = pArgs.npath
