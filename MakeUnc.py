@@ -286,7 +286,9 @@ class MakeHMA(MakeUnc):
 
 
 
-def PathsGen(l2PathsGen,l2MainPath):
+def PathsGen(matchPattern,l2MainPath):
+    # create generator of l2 directory paths
+    l2PathsGen = glob.iglob(matchPattern)
     spatt=re.compile('(S[0-9]+)')
     for l2path in l2PathsGen:
         if os.path.isdir(l2path):
@@ -313,10 +315,9 @@ class CBatchManager():
         self.pArgs = pArgs
         self.l2MainPath = pArgs.ipath
         if self.pArgs.sensor == 'SeaWiFS':
-            matchPattern = os.path.join(self.l2MainPath,'S*/')
+            self.matchPattern = os.path.join(self.l2MainPath,'S*/')
             basePat = re.compile('(S[0-9]+)')
-        # create generator of l2 directory paths
-        self.l2PathsGen = glob.iglob(matchPattern)
+
         return None
 
     def _BatchRun(self,sArgs):
@@ -328,12 +329,11 @@ class CBatchManager():
         return uncObj.silFile
 
     def ProcessL2s(self):
-        paramGen = (params for params in PathsGen(self.l2PathsGen,
+        paramGen = (params for params in PathsGen(self.matchPattern,
                                                     self.l2MainPath))
         with mp.Pool() as pool:
             results = pool.map(self._BatchRun,paramGen)
         return results # temporary: should be replaced by log entry
-
 
 def ParseCommandLine(args):
     parser = argparse.ArgumentParser()
