@@ -13,6 +13,7 @@ import logging
 import datetime as dt
 import multiprocessing as mp
 import pickle
+import shutil
 
 class MakeUnc(object):
     """
@@ -34,10 +35,13 @@ class MakeUnc(object):
         self._SetLogger()
         self.silFile = silFile
         self.noisyDir = noisyDir
+        # Process options
         self.fnum = kwargs.pop("fnum",None)
         self.doSaniCheck = kwargs.pop("doSaniCheck",False)
         self.doChla = kwargs.pop("doChla",False)
         self.doNflh = kwargs.pop("doNflh",False)
+        if kwargs.pop("pSafe",True):
+            self._PlaySafe()
         self.rrsSilDict = dict.fromkeys(self.bands)
         self.attrRrsUncDict = dict.fromkeys(self.bands)
         self.dimsDict = dict.fromkeys(self.bands)
@@ -60,6 +64,23 @@ class MakeUnc(object):
             self.attrOtherProdUncDict = dict.fromkeys(attrUncKeys)
             self.dTypeDict.update(dict.fromkeys(attrUncKeys))
             self.dimsDict.update(dict.fromkeys(attrUncKeys))
+
+    def _PlaySafe(self):
+        '''
+        Function to copy backup of unprocessed silent L2
+        This so as not to redo entire processing if a problem arises.
+        If a copy already exists, it is assumed this is not the first processing
+        attempt and the silent L2 is now tainted. It is removed and a clean copy
+        is generated from the backup.
+        '''
+        orig = self.silFile
+        cpy = self.silFile + '.cpy'
+        if os.path.exists(cpy): # this is not the first time - something went wrong
+            os.remove(orig) # remove "original - tainted file"
+            self.silFile=shutil.copy2(cpy,orig)
+        else:
+            shutil.copy2(orig,cpy)
+
 
     def _SetLogger(self):
         self.logger = logging.getLogger(__name__)
