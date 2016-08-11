@@ -1,6 +1,6 @@
-from subprocess import Popen,STDOUT,DEVNULL
-import glob,re,random,os
-import logging,pickle,sys
+from subprocess import Popen, DEVNULL
+import glob, re, random, os
+import logging, pickle, sys
 import multiprocessing as mp
 import argparse
 from itertools import islice
