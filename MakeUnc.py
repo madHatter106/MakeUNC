@@ -77,9 +77,12 @@ class MakeUnc(object):
         cpy = self.silFile + '.cpy'
         if os.path.exists(cpy): # this is not the first time - something went wrong
             os.remove(orig) # remove "original - tainted file"
-            self.silFile=shutil.copy2(cpy,orig)
+            self.logger.info('%s already exists. Removing original %s' % (cpy, orig))
+            shutil.copy2(cpy,orig)
+            self.logger.info('Copying silent from %s' % cpy)
         else:
             shutil.copy2(orig,cpy)
+            self.logger.info('No copy for %s. Generating copy' % self.silFile)
 
 
     def _SetLogger(self):
@@ -339,8 +342,6 @@ class CBatchManager():
         self.l2MainPath = pArgs.ipath
         if self.pArgs.sensor == 'SeaWiFS':
             self.matchPattern = os.path.join(self.l2MainPath,'S*/')
-            basePat = re.compile('(S[0-9]+)')
-
         return None
 
     def _BatchRun(self,sArgs):
@@ -367,7 +368,7 @@ def ParseCommandLine(args):
     parser.add_argument('-n', '--npath', help='Path to noisy data directory.',
                         type=str)
     parser.add_argument('-s', '--nsfx',
-                        help='Noisy file suffix for pattern matching.',
+                        help='Noisy file suffix for pattern matching. Defaults to _noisy_',
                         type=str, default='_noisy_')
     parser.add_argument('-c', '--dochl', help='Compute chloropyll uncertainty.',
                         action='store_true')
@@ -378,10 +379,10 @@ def ParseCommandLine(args):
                         action='store_true')
     parser.add_argument('-b','--batch',help='Batch processing option.',
                         action='store_true')
-    parser.add_argument('-w','--workers',help='Number of concurrent processes.',
+    parser.add_argument('-w','--workers',help='Number of concurrent processes. Defaults to 1',
                         type=int, default=1)
     parser.add_argument('-z','--sensor',
-                        help='Specify sensor data originates from.',
+                        help='Specify sensor data originates from. Defaults to SeaWiFS',
                         type=str,default='SeaWiFS')
     parsedArgs = parser.parse_args(args)
     return parsedArgs
