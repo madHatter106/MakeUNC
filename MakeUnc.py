@@ -1,4 +1,4 @@
-#!/disk01/home/ekarakoy/anaconda3/bin/python
+#! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Mon Nov  2 15:09:44 2015
