@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 from subprocess import Popen, DEVNULL
 import glob
 import re
@@ -9,7 +11,7 @@ import multiprocessing as mp
 import argparse
 from itertools import islice
 from datetime import datetime as dt
-from MakeUNC import MakeUnc
+
 
 class CMCRunner():
     '''
@@ -17,7 +19,7 @@ class CMCRunner():
     Creates silent/noisy files  in the appropriate directories for later use
     by the uncertainty computation script.
     '''
-    def __init__(self,pArgs):
+    def __init__(self, pArgs):
         '''
         Takes pre-parsed command line arguments.
         '''
@@ -40,14 +42,16 @@ class CMCRunner():
         self.logMeta = None
         self._GetL2FilePath()
         if self.verbose:
-            self.logfname = os.path.join(self.l2MainPath, '%s.log' % self.basename)
+            self.logfname = os.path.join(self.l2MainPath, '%s.log'
+                                         % self.basename)
             with open(self.logfname, 'w') as lf:
                 print("L1 file: %s" % self.l1path, file=lf)
                 print("L2 main path %s" % self.l2MainPath, file=lf)
                 print("silent ParFile %s" % self.silParFi, file=lf)
                 print("noisy ParFile %s" % self.noiParFi, file=lf)
                 print("number of iterations %d" % self.itNum, file=lf)
-                print("number of concurrent processes %d" % self.workers, file=lf)
+                print("number of concurrent processes %d" % self.workers,
+                      file=lf)
                 print("silent L2 file: %s" % self.l2SilFname, file=lf)
                 print("noisy L2 path: %s" % self.l2NoiPath, file=lf)
 
@@ -96,9 +100,10 @@ class CMCRunner():
         cmdList is a generator yielding l2gen command lines for each process.
         '''
         status = False
-        processes = (Popen(cmd, shell=True, stdout=DEVNULL) for cmd in cmdList)
-        # start new processes
-        runningProcs = list(islice(processes, self.workers))
+        # create process generator
+        processes = (Popen(cmd, shell=True, stdout=DEVNULL)
+                     for cmd in cmdList)
+        runningProcs = list(islice(processes, self.workers))  # start new ps
         while runningProcs:
             for i, process in enumerate(runningProcs):
                 if process.poll() is not None:  # process has finished
@@ -145,7 +150,7 @@ class CBatchManager():
             self.pArgs.ifile = ifile
             mcr = CMCRunner(self.pArgs)
             pickle.dump(mcr, open(os.path.join(mcr.l2MainPath, 'mcr_%s.pkl'
-                                  % mcr.basename), 'wb'))
+                                               % mcr.basename), 'wb'))
             cmdGen = mcr.GetCmdList()
             status = mcr.Runner(cmdGen)
             if status:
@@ -157,7 +162,7 @@ class CBatchManager():
                 del mcr  # make room for the next mc set
         return None
 
-    def CreateMakeUNCArgs(**kwargs):
+    def CreateCmdLineArgs(**kwargs):
         pArgs = CNamespace(**kwargs)
         return pArgs
 
@@ -183,9 +188,6 @@ def ParseCommandLine(args):
                         action='store_true')
     parser.add_argument('-b', '--batch', help='batch processing',
                         action='store_true')
-    parser.add_argument('-c', '--complete',
-                        help='from L1As to unc. packed into baseline L2',
-                        action='store_true')
     parsedArgs = parser.parse_args(args)
     return parsedArgs
 
@@ -193,27 +195,17 @@ def ParseCommandLine(args):
 def Main(args):
 
     pArgs = ParseCommandLine(args)
+
     if pArgs.batch:
         bcr = CBatchManager(pArgs)
         bcr.ProcessL1A()
     else:
         # Init MCRUnner Object, passing the args
         mcr = CMCRunner(pArgs)
-        # Process Silent file
+        # Run MC process; includes creating silent file and noisy files
         taskList = mcr.GetCmdList()
         mcr.Runner(taskList)
-        if pArgs.complete:
-            # analyze ifile to determine sensor
-            # initialize instance of appropriate subclass
-            # ReadFromSilent
-            # BuildUncs
-            # WriteToSilent
-            ifile = pArgs.ifile
-            opath = pArgs.opath
 
-            uncObj.ReadFromSilent()
-            uncObj.BuildUncs(pArgs.nsfx)
-            uncObj.WriteToSilent()
 
 if __name__ == '__main__':
     Main(sys.argv[1:])
