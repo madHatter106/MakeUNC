@@ -30,29 +30,26 @@ class MakeUnc(object):
         *args:
             1- baselineFile
             2- noisyDir -- directory where noisy files are located
-        **kwargs:
-            1- fnum -- number of files to process [=None |1,2,...]
-            2- doSaniCheck -- recover noise model by calculating Lt_unc
-                [=False | True]
+
 
     """
-    def __init__(self, silFile, noisyDir, **kwargs):
-        self.verbose = kwargs.pop('verbose', False)
+    def __init__(self, silFile, noisyDir, pArgs):
+        self.verbose = pArgs.verbose
         self._SetLogger()
         self.silFile = silFile
         self.noisyDir = noisyDir
         # Process options
-        self.fnum = kwargs.pop("fnum", None)
-        self.doSaniCheck = kwargs.pop("doSaniCheck", False)
-        self.doChla = kwargs.pop("doChla", False)
-        self.doNflh = kwargs.pop("doNflh", False)
-        if kwargs.pop("pSafe", True):
-            self._PlaySafe()
+        self.doChla = pArgs.dochl
+        self.doNflh = pArgs.doflh
+        self.pSafe = pArgs.psafe
+        self.doSaniCheck = pArgs.sanity
         self.rrsSilDict = dict.fromkeys(self.bands)
         self.attrRrsUncDict = dict.fromkeys(self.bands)
         self.dimsDict = dict.fromkeys(self.bands)
         self.dTypeDict = dict.fromkeys(self.bands)
         self.rrsUncArrDict = dict.fromkeys(self.bands)
+        if self.pSafe:
+            self._PlaySafe()
         if self.doSaniCheck:
             self.ltUncArrDict = dict.fromkeys(self.bands)
             self.ltSilDict = dict.fromkeys(self.bands)
@@ -73,7 +70,7 @@ class MakeUnc(object):
 
     def _PlaySafe(self):
         '''
-        Function to copy backup of unprocessed silent L2
+        Method to copy backup of unprocessed silent L2
         This so as not to redo entire processing if a problem arises.
         If a copy already exists, it is assumed this is not the first
         processing attempt and the silent L2 is now tainted. It is removed and
@@ -230,10 +227,7 @@ class MakeUnc(object):
                             nflhAggDataArr += (noisyNflh -
                                                self.otherProdsDict['nflh']
                                                ) ** 2
-                if self.fnum is not None:
-                    # number of files to process specified is reached: break
-                    if (fcount + 1) > self.fnum:
-                        break
+
 
         for band in self.bands:
             if self.verbose:
@@ -404,15 +398,19 @@ def ParseCommandLine(args):
     parser.add_argument('-s', '--nsfx',
                         help='Noisy file suffix for pattern matching.',
                         type=str, default='_noisy_')
-    parser.add_argument('-c', '--dochl', help='Compute chloropyll uncertainty.'
-                        , action='store_true')
+    parser.add_argument('-c', '--dochl', help='Compute chloropyll uncertainty.',
+                        action='store_true', default=False)
     parser.add_argument('-f', '--doflh',
                         help='Compute normalized fluorescence line height.',
-                        action='store_true')
+                        action='store_true', default=False)
+    parser.add_argument('-p', '--psafe', help='Back source file up.',
+                        action='store_true', default=False)
+    parser.add_argument('-d', '--sanity', help='Do sanity check.',
+                        action='store_true', default=False)
     parser.add_argument('-v', '--verbose', help='Augment output verbosity',
-                        action='store_true')
+                        action='store_true', default=False)
     parser.add_argument('-b', '--batch', help='Batch processing option.',
-                        action='store_true')
+                        action='store_true', default=False)
     parser.add_argument('-w', '--workers',
                         help='Number of concurrent processes',
                         type=int, default=1)
@@ -440,13 +438,11 @@ def Main(argv):
         if noisyDataDir[-1] != '/':
             noisyDataDir += '/'
         if baseLineFname[0] == 'S':
-            uncObj = MakeSwfUnc(pArgs.ifile, pArgs.npath,
-                                verbose=pArgs.verbose)
+            uncObj = MakeSwfUnc(pArgs.ifile, pArgs.npath,pArgs)
         elif baseLineFname[0] == 'A':
-            uncObj = MakeHMA(baseLineFile, noisyDataDir, doChla=pArgs.dochl,
-                             doNflh=pArgs.doflh, verbose=pArgs.verbose)
+            uncObj = MakeHMA(baseLineFile, noisyDataDir, pArgs)
         uncObj.ReadFromSilent()
-        uncObj.BuildUncs(noisySfx, verbose=pArgs.verbose)
+        uncObj.BuildUncs(noisySfx)
         uncObj.WriteToSilent()
 
 if __name__ == "__main__":
