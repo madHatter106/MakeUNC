@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
-from subprocess import Popen, DEVNULL
+from subprocess import Popen, DEVNULL, STDOUT
+from io import StringIO
 import glob
 import re
 import os
@@ -18,34 +19,12 @@ __version__ = "0.5"
 
 class L2genRunner():
 
-    def __init__(self, workers, debug=False):
+    def __init__(self, workers):
         maxProcs = (mp.cpu_count() - 1) * 2
         if workers > maxProcs:
             self.workers = maxProcs
         else:
             self.workers = workers
-        self.dbg = debug
-        self.__set_logger()
-
-    def __set_logger(self):
-        self.logger = logging.getLogger(__name__)
-        formatter = logging.Formatter(' % (asctime)s [ % (levelname)s]:\
-                                      % (message)s')
-        if self.dbg:
-            self.logger.setLevel(logging.DEBUG)
-            formatter = logging.Formatter(' % (asctime)s [ % (levelname)s]\
-                                          % (name)s, % (funcName)s,\
-                                          % (lineno)d: % (message)s')
-            ch = logging.StreamHandler()  # debug statements will appear in the console
-            ch.setLevel(logging.DEBUG)
-            ch.setFormatter(formatter)
-            self.logger.addHandler(ch)
-        else:
-            self.logger.setLevel(logging.INFO)
-        fh = logging.FileHandler('l2genRunner.log')
-        fh.setLevel(logging.INFO)
-        fh.setFormatter(formatter)
-        self.logger.addHandler(fh)
 
     def Runner(self, cmdList):
         '''
@@ -55,7 +34,7 @@ class L2genRunner():
         '''
         status = False
         # create process generator
-        processes = (Popen(cmd, shell=True, stdout=DEVNULL)
+        processes = (Popen(cmd, shell=True, stderr=DEVNULL, stdout=DEVNULL)
                      for cmd in cmdList)
         runningProcs = list(islice(processes, self.workers))  # start new ps
         while runningProcs:
@@ -78,7 +57,7 @@ class CMCRunner(L2genRunner):
     Creates silent/noisy files  in the appropriate directories for later use
     by the uncertainty computation script.
     '''
-    def __init__(self, pArgs):
+    def __init__(self, pArgs, parent_logger_name=None):
         '''
         Takes pre-parsed command line arguments.
         '''
@@ -95,16 +74,26 @@ class CMCRunner(L2genRunner):
         self.basename = None
         self.logfname = None
         self.logMeta = None
-        super(CMCRunner, self).__init__(pArgs.workers, pArgs.debug)
+        super(CMCRunner, self).__init__(pArgs.workers)
         self._GetL2FilePath()
-        self.logger.info("L1 file: %s" % self.l1path)
-        self.logger.info("L2 main path %s" % self.l2MainPath)
-        self.logger.info("silent ParFile %s" % self.silParFi)
-        self.logger.info("noisy ParFile %s" % self.noiParFi)
-        self.logger.info("number of iterations %d" % self.itNum)
-        self.logger.info("number of concurrent processes %d" % self.workers)
-        self.logger.info("silent L2 file: %s" % self.l2SilFname)
-        self.logger.info("noisy L2 path: %s" % self.l2NoiPath)
+        if parent_logger_name is not None:
+            self._SetLogger(parent_logger_name)
+            self.logger.info("L1 file: %s" % self.l1path)
+            self.logger.info("L2 main path %s" % self.l2MainPath)
+            self.logger.info("silent ParFile %s" % self.silParFi)
+            self.logger.info("noisy ParFile %s" % self.noiParFi)
+            self.logger.info("number of iterations %d" % self.itNum)
+            self.logger.info("number of concurrent processes %d" % self.workers)
+            self.logger.info("silent L2 file: %s" % self.l2SilFname)
+            self.logger.info("noisy L2 path: %s" % self.l2NoiPath)
+
+    def _SetLogger(self, pln):
+        '''
+        The user is expected to set the logger in the 'main' module and
+        pass on its name to this child logger. Otherwise no logging will occurr.
+        '''
+        self.logger = logging.getLogger('%s.RunL2genMC.CMCRunner' % pln)
+        self.logger.info('logger initialized')
 
     def _GetL2FilePath(self):
         '''
@@ -125,9 +114,7 @@ class CMCRunner(L2genRunner):
         '''Generates cmdList for subprocess calls'''
         cmdBase = 'l2gen ifile=%s ofile=' % self.l1path
         if os.path.exists(self.l2SilFname):
-            if self.verbose:
-                with open(self.logfname, 'a') as lf:
-                    print('skipping silent L2', file=lf)
+            self.logger.info('skipping silent L2')
         else:
             # silent L2 does not exist, add it to the tasklist
             cmd = cmdBase + '%s par=%s' % (self.l2SilFname, self.silParFi)
@@ -137,9 +124,7 @@ class CMCRunner(L2genRunner):
             l2f = '%s_noisy_%d.L2' % (self.basename, it+1)
             ofile = os.path.join(self.l2NoiPath, l2f)
             if os.path.exists(ofile):
-                if self.verbose:
-                    with open(self.logfname, 'a') as lf:
-                        print('skipping noisy file %s' % l2f, file=lf)
+                self.logger.info('skipping noisy file %s' % l2f)
                 continue
             cmd = cmdBase + '%s par=%s' % (ofile, self.noiParFi)
             yield cmd
@@ -182,7 +167,7 @@ class CBatchManager():
     Class to manage batch processing of multiple L1A files by the MCRunner.
     '''
 
-    def __init__(self, bArgs, isdir=True):
+    def __init__(self, bArgs, isdir=True, parent_logger_name=None):
         '''Takes a directory containing L1A or a text file listing
         L1Apaths on each line.'''
         if isdir:
@@ -191,9 +176,16 @@ class CBatchManager():
             self.pArgs = bArgs
             self.verbose = self.pArgs.verbose
             self.l2MainPath = self.pArgs.opath
+            if parent_logger_name is not None:
+                self._SetLogger(parent_logger_name)
 
-            if self.verbose:
-                self.logMeta = os.path.join(self.l2MainPath, 'Meta.log')
+    def _SetLogger(self, pln):
+        '''
+        The user is expected to set the logger in the 'main' module and
+        pass on its name to this child logger. Otherwise no logging will occurr.
+        '''
+        self.logger = logging.getLogger('%s.RunL2genMC.CMCRunner' % pln)
+        self.logger.info('logger initialized')
 
     def ProcessL1A(self):
         '''Calls L1AGenerator to get next file to process'''
@@ -237,7 +229,7 @@ def ParseCommandLine(args):
                         type=int, default=1000)
     parser.add_argument('-w', '--workers', help='process # to allocate',
                         type=int, default=1)
-    parser.add_argument('-v', '--verbose', help='increase output verbosity',
+    parser.add_argument('-d', '--debug', help='increase output verbosity',
                         action='store_true')
     parser.add_argument('-b', '--batch', help='batch processing',
                         action='store_true')
