@@ -12,15 +12,40 @@ import argparse
 from itertools import islice
 from datetime import datetime as dt
 
+__author__ = "Erdem K."
+__version__ = "0.5"
+
 
 class L2genRunner():
 
-    def __init__(self, workers):
+    def __init__(self, workers, debug=False):
         maxProcs = (mp.cpu_count() - 1) * 2
         if workers > maxProcs:
             self.workers = maxProcs
         else:
             self.workers = workers
+        self.dbg = debug
+        self.__set_logger()
+
+    def __set_logger(self):
+        self.logger = logging.getLogger(__name__)
+        formatter = logging.Formatter(' % (asctime)s [ % (levelname)s]:\
+                                      % (message)s')
+        if self.dbg:
+            self.logger.setLevel(logging.DEBUG)
+            formatter = logging.Formatter(' % (asctime)s [ % (levelname)s]\
+                                          % (name)s, % (funcName)s,\
+                                          % (lineno)d: % (message)s')
+            ch = logging.StreamHandler()  # debug statements will appear in the console
+            ch.setLevel(logging.DEBUG)
+            ch.setFormatter(formatter)
+            self.logger.addHandler(ch)
+        else:
+            self.logger.setLevel(logging.INFO)
+        fh = logging.FileHandler('l2genRunner.log')
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(formatter)
+        self.logger.addHandler(fh)
 
     def Runner(self, cmdList):
         '''
@@ -42,6 +67,9 @@ class L2genRunner():
                         status = True
                         break
         return status
+
+    def GetCmdList(self):
+        raise NotImplementedError
 
 
 class CMCRunner(L2genRunner):
