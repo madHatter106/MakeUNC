@@ -88,28 +88,23 @@ class CMCRunner(L2genRunner):
         self.silParFi = pArgs.prsil
         self.noiParFi = pArgs.prnoi
         self.itNum = pArgs.mcrns
-        self.verbose = pArgs.verbose
+        self.debug = pArgs.debug
         self.filesProcessed = 0
         self.l2SilFname = None
         self.l2NoiPath = None
         self.basename = None
         self.logfname = None
         self.logMeta = None
-        super(CMCRunner, self).__init__(pArgs.workers)
+        super(CMCRunner, self).__init__(pArgs.workers, pArgs.debug)
         self._GetL2FilePath()
-        if self.verbose:
-            self.logfname = os.path.join(self.l2MainPath, '%s.log'
-                                         % self.basename)
-            with open(self.logfname, 'w') as lf:
-                print("L1 file: %s" % self.l1path, file=lf)
-                print("L2 main path %s" % self.l2MainPath, file=lf)
-                print("silent ParFile %s" % self.silParFi, file=lf)
-                print("noisy ParFile %s" % self.noiParFi, file=lf)
-                print("number of iterations %d" % self.itNum, file=lf)
-                print("number of concurrent processes %d" % self.workers,
-                      file=lf)
-                print("silent L2 file: %s" % self.l2SilFname, file=lf)
-                print("noisy L2 path: %s" % self.l2NoiPath, file=lf)
+        self.logger.info("L1 file: %s" % self.l1path)
+        self.logger.info("L2 main path %s" % self.l2MainPath)
+        self.logger.info("silent ParFile %s" % self.silParFi)
+        self.logger.info("noisy ParFile %s" % self.noiParFi)
+        self.logger.info("number of iterations %d" % self.itNum)
+        self.logger.info("number of concurrent processes %d" % self.workers)
+        self.logger.info("silent L2 file: %s" % self.l2SilFname)
+        self.logger.info("noisy L2 path: %s" % self.l2NoiPath)
 
     def _GetL2FilePath(self):
         '''
@@ -223,6 +218,8 @@ class CBatchManager():
         return pArgs
 
 
+# TODO def ConsolidateParfile()
+
 def ParseCommandLine(args):
     '''
     Returns argparse object with parsed arguments as attributes
@@ -245,6 +242,7 @@ def ParseCommandLine(args):
     parser.add_argument('-b', '--batch', help='batch processing',
                         action='store_true')
     parsedArgs = parser.parse_args(args)
+    # TODO parsedArgs = ConsolidateParfile(parsedArgs)
     return parsedArgs
 
 
