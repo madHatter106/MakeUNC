@@ -13,7 +13,38 @@ from itertools import islice
 from datetime import datetime as dt
 
 
-class CMCRunner():
+class L2genRunner():
+
+    def __init__(self, workers):
+        maxProcs = (mp.cpu_count() - 1) * 2
+        if workers > maxProcs:
+            self.workers = maxProcs
+        else:
+            self.workers = workers
+
+    def Runner(self, cmdList):
+        '''
+        Creates a generator for processes then slices through the iterator
+        by the number ofconcurrent processes allowed.
+        cmdList is a generator yielding l2gen command lines for each process.
+        '''
+        status = False
+        # create process generator
+        processes = (Popen(cmd, shell=True, stdout=DEVNULL)
+                     for cmd in cmdList)
+        runningProcs = list(islice(processes, self.workers))  # start new ps
+        while runningProcs:
+            for i, process in enumerate(runningProcs):
+                if process.poll() is not None:  # process has finished
+                    runningProcs[i] = next(processes, None)  # start new ps
+                    if runningProcs[i] is None:  # no new processes
+                        del runningProcs[i]
+                        status = True
+                        break
+        return status
+
+
+class CMCRunner(L2genRunner):
     '''
     Class to run l2gen monte carlo process, by default in parallel.
     Creates silent/noisy files  in the appropriate directories for later use
@@ -23,11 +54,7 @@ class CMCRunner():
         '''
         Takes pre-parsed command line arguments.
         '''
-        maxProcs = (mp.cpu_count() - 1) * 2
-        if pArgs.workers > maxProcs:
-            self.workers = maxProcs
-        else:
-            self.workers = pArgs.workers
+
         self.l1path = pArgs.ifile
         self.l2MainPath = pArgs.opath
         self.silParFi = pArgs.prsil
@@ -40,6 +67,7 @@ class CMCRunner():
         self.basename = None
         self.logfname = None
         self.logMeta = None
+        super(CMCRunner, self).__init__(pArgs.workers)
         self._GetL2FilePath()
         if self.verbose:
             self.logfname = os.path.join(self.l2MainPath, '%s.log'
