@@ -1,29 +1,36 @@
-
-from RunL2genMC import CMCRunner
+#!/usr/bin/env python3
+from RunL2genMC import CMCRunner, CBatchManager
+# from MakeUnc import MakeSwfUnc, MakeHMA
+import argparse
 import logging
+import sys
 
 
-def SetLogger(dbg=False, logger_name=__name__, logfn='CallMC.log'):
-    # create logger with 'spam_application'
+def SetLogger(logger_name, dbg_lvl=False):
+    '''
+
+    '''
+    logfn = '%s.log' % logger_name
     logger = logging.getLogger(logger_name)
-    if dbg:
+    if dbg_lvl:
         logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -'
+                                      + ' [%(module)s..%(funcName)s..%(lineno)d]'
+                                      + ' - %(message)s')
     else:
         logger.setLevel(logging.INFO)
-    # create file handler which logs even debug messages
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     fh = logging.FileHandler(logfn)
     fh.setLevel(logging.DEBUG)
-    # create console handler with a higher log level
+    fh.setFormatter(formatter)
     ch = logging.StreamHandler()
     ch.setLevel(logging.ERROR)
-    # create formatter and add it to the handlers
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    fh.setFormatter(formatter)
     ch.setFormatter(formatter)
-    # add the handlers to the logger
-    logger.addHandler(fh)
     logger.addHandler(ch)
+    logger.addHandler(fh)
+    logger.debug('logging')
     return logger
+
 
 def ParseCommandLine(args):
     '''
@@ -43,7 +50,9 @@ def ParseCommandLine(args):
     parser.add_argument('-w', '--workers', help='process # to allocate',
                         type=int, default=1)
     parser.add_argument('-d', '--debug', help='increase output verbosity',
-                        action='store_true')
+                        action='store_true', default=False)
+    parser.add_argument('--logName', help='logger name',
+                        type=str, default='CallMCLog')
     parser.add_argument('-b', '--batch', help='batch processing',
                         action='store_true')
     parsedArgs = parser.parse_args(args)
@@ -53,15 +62,18 @@ def ParseCommandLine(args):
 
 def Main(args):
     pArgs = ParseCommandLine(args)
-    parent_logger = SetLogger(pArgs.debug)
+    mainLogger = SetLogger(logger_name=pArgs.logName, dbg_lvl=pArgs.debug)
+    mainLogger.info('Get this?')
     if pArgs.batch:
+        mainLogger.info('Initializing batch processor')
         bcr = CBatchManager(pArgs)
         bcr.ProcessL1A()
     else:
-        # Init MCRUnner Object, passing the args
-        mcr = CMCRunner(pArgs)
-        # Run MC process; includes creating silent file and noisy files
+        mainLogger.info('Init MCRUnner Object w/ pArgs')
+        mcr = CMCRunner(pArgs, mainLogger.name)
+        mainLogger.info('Creating task list')
         taskList = mcr.GetCmdList()
+        mainLogger.info('Feeding tasklist l2gen runner')
         mcr.Runner(taskList)
 
 if __name__ == '__main__':
