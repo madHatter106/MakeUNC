@@ -1,7 +1,6 @@
 #! /usr/bin/env python3
 
-from subprocess import Popen, DEVNULL, STDOUT
-from io import StringIO
+from subprocess import Popen, DEVNULL
 import glob
 import re
 import os
@@ -57,7 +56,7 @@ class CMCRunner(L2genRunner):
     Creates silent/noisy files  in the appropriate directories for later use
     by the uncertainty computation script.
     '''
-    def __init__(self, pArgs, parent_logger_name=None):
+    def __init__(self, pArgs, parent_logger_name):
         '''
         Takes pre-parsed command line arguments.
         '''
@@ -76,16 +75,15 @@ class CMCRunner(L2genRunner):
         self.logMeta = None
         super(CMCRunner, self).__init__(pArgs.workers)
         self._GetL2FilePath()
-        if parent_logger_name is not None:
-            self._SetLogger(parent_logger_name)
-            self.logger.info("L1 file: %s" % self.l1path)
-            self.logger.info("L2 main path %s" % self.l2MainPath)
-            self.logger.info("silent ParFile %s" % self.silParFi)
-            self.logger.info("noisy ParFile %s" % self.noiParFi)
-            self.logger.info("number of iterations %d" % self.itNum)
-            self.logger.info("number of concurrent processes %d" % self.workers)
-            self.logger.info("silent L2 file: %s" % self.l2SilFname)
-            self.logger.info("noisy L2 path: %s" % self.l2NoiPath)
+        self._SetLogger(parent_logger_name)
+        self.logger.info("L1 file: %s" % self.l1path)
+        self.logger.info("L2 main path %s" % self.l2MainPath)
+        self.logger.info("silent ParFile %s" % self.silParFi)
+        self.logger.info("noisy ParFile %s" % self.noiParFi)
+        self.logger.info("number of iterations %d" % self.itNum)
+        self.logger.info("number of concurrent processes %d" % self.workers)
+        self.logger.info("silent L2 file: %s" % self.l2SilFname)
+        self.logger.info("noisy L2 path: %s" % self.l2NoiPath)
 
     def _SetLogger(self, pln):
         '''
@@ -111,7 +109,7 @@ class CMCRunner(L2genRunner):
         self.basename = basename
 
     def GetCmdList(self):
-        '''Generates cmdList for subprocess calls'''
+        '''Generator: generates cmdList for subprocess calls'''
         cmdBase = 'l2gen ifile=%s ofile=' % self.l1path
         if os.path.exists(self.l2SilFname):
             self.logger.info('skipping silent L2')
@@ -137,7 +135,7 @@ class CMCRunner(L2genRunner):
         '''
         status = False
         # create process generator
-        processes = (Popen(cmd, shell=True, stdout=DEVNULL)
+        processes = (Popen(cmd, shell=True, stdout=DEVNULL, stderr=DEVNULL)
                      for cmd in cmdList)
         runningProcs = list(islice(processes, self.workers))  # start new ps
         while runningProcs:
@@ -212,6 +210,29 @@ class CBatchManager():
 
 # TODO def ConsolidateParfile()
 
+def SetLogger(logger_name, dbg_lvl):
+    '''
+
+    '''
+    logfn = '%s.log' % logger_name
+    logger = logging.getLogger(logger_name)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    if dbg_lvl:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+    fh = logging.FileHandler(logfn)
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.ERROR)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+    logger.debug('logging')
+    return logger
+
+
 def ParseCommandLine(args):
     '''
     Returns argparse object with parsed arguments as attributes
@@ -230,7 +251,9 @@ def ParseCommandLine(args):
     parser.add_argument('-w', '--workers', help='process # to allocate',
                         type=int, default=1)
     parser.add_argument('-d', '--debug', help='increase output verbosity',
-                        action='store_true')
+                        action='store_true', default=False)
+    parser.add_argument('--logName', help='logger name',
+                        type=str, default='CallMCLog')
     parser.add_argument('-b', '--batch', help='batch processing',
                         action='store_true')
     parsedArgs = parser.parse_args(args)
@@ -241,15 +264,18 @@ def ParseCommandLine(args):
 def Main(args):
 
     pArgs = ParseCommandLine(args)
+    mainLogger = SetLogger(logger_name=pArgs.logName, dbg_lvl=pArgs.debug)
 
     if pArgs.batch:
+        mainLogger.info('Initializing batch processor')
         bcr = CBatchManager(pArgs)
         bcr.ProcessL1A()
     else:
-        # Init MCRUnner Object, passing the args
-        mcr = CMCRunner(pArgs)
-        # Run MC process; includes creating silent file and noisy files
+        mainLogger.info('Init MCRUnner Object w/ pArgs')
+        mcr = CMCRunner(pArgs, mainLogger.name)
+        mainLogger.info('Creating task list')
         taskList = mcr.GetCmdList()
+        mainLogger.info('Feeding tasklist l2gen runner')
         mcr.Runner(taskList)
 
 
