@@ -17,6 +17,7 @@ import datetime as dt
 import multiprocessing as mp
 import pickle
 import shutil
+from datetime import datetime as DT
 
 
 class MakeUnc(object):
@@ -33,11 +34,10 @@ class MakeUnc(object):
 
 
     """
-    def __init__(self, silFile, noisyDir, pArgs):
-        self.verbose = pArgs.verbose
-        self._SetLogger()
-        self.silFile = silFile
-        self.noisyDir = noisyDir
+    def __init__(self, pArgs, parent_logger_name):
+        self.logger = logging.getLogger('%s.MakeUnc' % parent_logger_name)
+        self.silFile = pArgs.ifile
+        self.noisyDir = pArgs.npath
         # Process options
         self.doChla = pArgs.dochl
         self.doNflh = pArgs.doflh
@@ -56,9 +56,11 @@ class MakeUnc(object):
             self.attrLtUncDict = dict.fromkeys(self.bands)
         otherProdkeys = []
         if self.doChla:
+            self.logger.info('chl_a_unc will be included')
             otherProdkeys.append('chlor_a')
             otherProdkeys.append('chlor_a_unc')
         if self.doNflh:
+            self.logger.info('nflh_unc will be included')
             otherProdkeys.append('nflh')
             otherProdkeys.append('nflh_unc')
         if len(otherProdkeys) > 0:
@@ -88,24 +90,6 @@ class MakeUnc(object):
         else:
             shutil.copy2(orig, cpy)
             self.logger.info('No copy for %s. Generating copy' % self.silFile)
-
-    def _SetLogger(self):
-        self.logger = logging.getLogger(__name__)
-        logfilename = './MakeUnc' + str(dt.datetime.now())
-        fh = logging.FileHandler(logfilename, mode='w')
-        if self.verbose:
-            formatter = logging.Formatter(' % (asctime)s [ % (levelname)s]\
-                                          % (name)s, % (funcName)s,\
-                                          % (lineno)d: % (message)s')
-            fh.setLevel(logging.DEBUG)
-        else:
-            formatter = logging.Formatter(' % (asctime)s [ % (levelname)s]:\
-                                          % (message)s')
-            fh.setLevel(logging.INFO)
-        fh.setFormatter(formatter)
-        self.logger.addHandler(fh)
-        self.logger.info('Logger initialized')
-        return None
 
     def WriteToSilent(self):
         # first create NC variables if necessary
@@ -160,15 +144,19 @@ class MakeUnc(object):
     def BuildUncs(self, noisySfx):
         """"
         Calculates rrs uncertainty as st.dev of rrs. Note that to save time
-            I use unperturbed rrs as the rrs average for the simulation
+            I use unperturbed rrs as the rrs baseline for the simulation
         """
         fBaseName = self.silFile.split('/')[-1].split('.')[0].split('_')[0]
-        matchFilPatt = self.noisyDir + fBaseName + '*' + noisySfx + '*'
-        if self.verbose:
-            self.logger.info("searching for %s..." % matchFilPatt)
+        matchFilPatt = os.path.join(self.noisyDir, '%s*%s*' % (fBaseName, noisySfx))
+        self.logger.info("searching for %s..." % matchFilPatt)
         firstPass = [True] * len(self.bands)
         flis = glob.glob(matchFilPatt)
         lflis = len(flis)
+        if lflis == 0:
+            self.logger.error('No files to process with pattern %s' % matchFilPatt)
+            sys.exit(1)
+        else:
+            self.logger.info("%d files to be processed" % lflis)
         rrsAggDataDict = dict.fromkeys(self.bands)
         if self.doSaniCheck:
             ltAggDataDict = dict.fromkeys(self.bands)
@@ -179,11 +167,8 @@ class MakeUnc(object):
         # process noisy data
         for fcount, fname in enumerate(flis):
             prcDone = 100 * fcount / (lflis - 1)
-            if self.verbose:
-                self.logger.info("Loading and reading %s -- %.1f%%" %
-                                 (fname, prcDone))
-            else:
-                self.logger.info("\r%.1f%%" % prcDone)
+            self.logger.info("Loading and reading %s -- %.1f%%" %
+                             (fname, prcDone))
             with nc.Dataset(fname) as nds:
                 nGeoGr = nds.groups['geophysical_data']
                 nGeoVar = nGeoGr.variables
@@ -210,9 +195,7 @@ class MakeUnc(object):
                                               self.otherProdsDict['nflh']
                                               ) ** 2
                         firstPass[i] = False
-                        if self.verbose:
-                            print("\nFirst pass complete for band %s" % band,
-                                  end='...', flush=True)
+                        self.logger.debug('First pass complete for band %s' % band)
                     else:
                         rrsAggDataDict[band] += (noisyRrs -
                                                  self.rrsSilDict[band]) ** 2
@@ -228,21 +211,21 @@ class MakeUnc(object):
                                                self.otherProdsDict['nflh']
                                                ) ** 2
 
-
         for band in self.bands:
-            if self.verbose:
-                self.logger.info("\n...computing stdev for band %s" % band)
+            self.logger.debug("computing deviation for band %s" % band)
             self.rrsUncArrDict[band] = np.ma.sqrt(rrsAggDataDict[band] / lflis)
             if self.doSaniCheck:
                 self.ltUncArrDict[band] = np.sqrt(ltAggDataDict[band] / lflis)
+                self.logger.debug('running sanity check for band %s' % band)
             if self.doChla:
                 self.otherProdsDict['chlor_a_unc'] = np.ma.sqrt(chlAggDataArr
                                                                 / lflis)
+                self.logger.debug('computing deviation for chlor a')
             if self.doNflh:
                 self.otherProdsDict['nflh_unc'] = np.ma.sqrt(nflhAggDataArr
                                                              / lflis)
-        if self.verbose:
-            self.logger.info("\nProcessed %d files " % lflis)
+                self.logger.debug('computing deviation for nflh')
+        self.logger.info("\nProcessed %d files " % lflis)
         return None
 
     def ReadFromSilent(self):
@@ -257,12 +240,12 @@ class MakeUnc(object):
             l2flags = geoVar['l2_flags'][:]
             flagMaskArr = (l2flags & flagBits > 0)
         '''
-
+        self.logger.debug('attemping to open silent file %s' % self.silFile)
         with nc.Dataset(self.silFile, 'r') as dsSil:
             geoGr = dsSil.groups['geophysical_data']
             geoVar = geoGr.variables
             for band in self.bands:
-                rrs = geoVar['Rrs_'+band]
+                rrs = geoVar['Rrs_%s' % band]
                 self.rrsSilDict[band] = rrs[:]
                 self.attrRrsUncDict[band] = {'long_name': 'Uncertainty in ' +
                                                           rrs.long_name,
@@ -273,6 +256,7 @@ class MakeUnc(object):
                 self.dimsDict[band] = rrs.dimensions
                 self.dTypeDict[band] = rrs.dtype
                 if self.doSaniCheck:
+                    self.logger.debug('setting up to run sanity check for band %s' % band)
                     lt = geoVar['Lt_'+band]
                     self.ltSilDict[band] = lt[:]
                     self.attrLtUncDict[band] = {'long_name': 'Uncertainty in '
@@ -280,6 +264,7 @@ class MakeUnc(object):
                                                 '_FillValue': lt._FillValue,
                                                 'units': lt.units}
             if self.doChla:
+                self.logger.debug('setting up to compute chla uncertainty')
                 chla = geoVar['chlor_a']
                 self.otherProdsDict['chlor_a'] = chla[:]
                 self.attrOtherProdUncDict['chlor_a_unc'] = {'long_name':
@@ -293,6 +278,7 @@ class MakeUnc(object):
                 self.dTypeDict['chlor_a_unc'] = chla.dtype
                 self.dimsDict['chlor_a_unc'] = chla.dimensions
             if self.doNflh:
+                self.logger.debug('setting up to compute nflh uncertainty')
                 nflh = geoVar['nflh']
                 self.otherProdsDict['nflh'] = nflh[:]
                 self.attrOtherProdUncDict['nflh_unc'] = {'long_name':
@@ -320,7 +306,7 @@ class MakeSwfUnc(MakeUnc):
         self.colDict = {'412': '#001166', '443': '#004488', '490': '#116688',
                         '510': '#228844', '555': '#667722', '670': '#aa2211',
                         '765': '#770500', '865': '#440000'}
-        super(MakeSwfUnc, self).__init__(*args, **kwargs)
+        super(MakeSwfUnc, self).__init__(*args)
         return None
 
 
@@ -332,7 +318,7 @@ class MakeHMA(MakeUnc):
                                 ['412', '443', '488', '531', '547', '555',
                                  '645', '667', '678', '748', '859', '869',
                                  '1240', '1640', '2130'])
-        super(MakeHMA, self).__init__(*args, **kwargs)
+        super(MakeHMA, self).__init__(*args)
         self.colDict = {'412': '#001166', '443': '#004488', '488': '#1166FF',
                         '531': '#337722', '547': '#557733', '555': '#669922',
                         '645': '#883311', '667': '#aa2211', '678': '#dd3300'}
@@ -398,35 +384,65 @@ def ParseCommandLine(args):
     parser.add_argument('-s', '--nsfx',
                         help='Noisy file suffix for pattern matching.',
                         type=str, default='_noisy_')
-    parser.add_argument('-c', '--dochl', help='Compute chloropyll uncertainty.',
+    parser.add_argument('-c', '--dochl', help='Compute chloropyll uncertainty. Default is False',
                         action='store_true', default=False)
     parser.add_argument('-f', '--doflh',
-                        help='Compute normalized fluorescence line height.',
+                        help='Compute normalized fluorescence line height. Default is False',
                         action='store_true', default=False)
-    parser.add_argument('-p', '--psafe', help='Back source file up.',
+    parser.add_argument('-p', '--psafe', help='Back source file up. Default is False',
                         action='store_true', default=False)
-    parser.add_argument('-d', '--sanity', help='Do sanity check.',
+    parser.add_argument('-a', '--sanity', help='Do sanity check. Default is False',
                         action='store_true', default=False)
-    parser.add_argument('-v', '--verbose', help='Augment output verbosity',
-                        action='store_true', default=False)
-    parser.add_argument('-b', '--batch', help='Batch processing option.',
+    parser.add_argument('-b', '--batch', help='Batch processing option. Default is False',
                         action='store_true', default=False)
     parser.add_argument('-w', '--workers',
-                        help='Number of concurrent processes',
+                        help='Number of concurrent processes. Default is 1',
                         type=int, default=1)
     parser.add_argument('-z', '--sensor',
-                        help='Specify sensor data originates from.',
+                        help='Specify sensor data originates from. Default is SeaWiFS',
                         type=str, default='SeaWiFS')
+    parser.add_argument('-e', '--debug', help='increase output verbosity',
+                        action='store_true', default=False)
     parsedArgs = parser.parse_args(args)
     return parsedArgs
+
+
+def SetLogger(dbg=False):
+    '''
+    sets logger with more verbose format if dbg_lvl=True
+    '''
+    logger_name = 'MakeUNC_%s' % str(DT.now())
+    logfn = '%s.log' % logger_name
+    logger = logging.getLogger(logger_name)
+    if dbg:
+        level = logging.DEBUG
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -'
+                                      + ' [%(module)s..%(funcName)s..%(lineno)d]'
+                                      + ' - %(message)s')
+    else:
+        level = logging.INFO
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger.setLevel(level)
+    fh = logging.FileHandler(logfn)
+    fh.setLevel(level)
+    fh.setFormatter(formatter)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.WARNING)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+    logger.debug('logging')
+    return logger
 
 
 def Main(argv):
 
     pArgs = ParseCommandLine(argv)
+    mainLogger = SetLogger(dbg=pArgs.debug)
     if pArgs.batch:
         # min. cmd line is ipath for main L2Path (all L2s should be in a
         # common directory. ) and -b
+        mainLogger.info('Initializing batch processor')
         bRunner = CBatchManager(pArgs)
         res = bRunner.ProcessL2s()
         pickle.dump(res, open('L2BatchList.pkl', 'wb'))
@@ -438,9 +454,11 @@ def Main(argv):
         if noisyDataDir[-1] != '/':
             noisyDataDir += '/'
         if baseLineFname[0] == 'S':
-            uncObj = MakeSwfUnc(pArgs.ifile, pArgs.npath,pArgs)
+            mainLogger.info('processing SeaWiFS data')
+            uncObj = MakeSwfUnc(pArgs, mainLogger.name)
         elif baseLineFname[0] == 'A':
-            uncObj = MakeHMA(baseLineFile, noisyDataDir, pArgs)
+            mainLogger.info('processing MODISA data')
+            uncObj = MakeHMA(pArgs)
         uncObj.ReadFromSilent()
         uncObj.BuildUncs(noisySfx)
         uncObj.WriteToSilent()

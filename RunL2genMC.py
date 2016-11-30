@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-from subprocess import Popen, DEVNULL
+from subprocess import Popen, DEVNULL, PIPE
 import glob
 import re
 import os
@@ -91,7 +91,7 @@ class CMCRunner(L2genRunner):
         pass on its name to this child logger. Otherwise no logging will occurr.
         '''
         self.logger = logging.getLogger('%s.RunL2genMC.CMCRunner' % pln)
-        self.logger.info('logger initialized')
+        self.logger.info('%s initialized' % self.logger.name)
 
     def _GetL2FilePath(self):
         '''
@@ -135,11 +135,15 @@ class CMCRunner(L2genRunner):
         '''
         status = False
         # create process generator
-        processes = (Popen(cmd, shell=True, stdout=DEVNULL, stderr=DEVNULL)
+        processes = (Popen(cmd, shell=True, stdout=DEVNULL, stderr=PIPE)
                      for cmd in cmdList)
         runningProcs = list(islice(processes, self.workers))  # start new ps
         while runningProcs:
             for i, process in enumerate(runningProcs):
+                if self.debug:
+                    if process.stderr:
+                        for line in process.stderr.readlines():
+                            self.logger.debug('%d %s' %(i, line))
                 if process.poll() is not None:  # process has finished
                     runningProcs[i] = next(processes, None)  # start new ps
                     if runningProcs[i] is None:  # no new processes
@@ -210,17 +214,20 @@ class CBatchManager():
 
 # TODO def ConsolidateParfile()
 
-def SetLogger(logger_name, dbg_lvl):
+def SetLogger(logger_name, dbg_lvl=False):
     '''
 
     '''
     logfn = '%s.log' % logger_name
     logger = logging.getLogger(logger_name)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     if dbg_lvl:
         logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -'
+                                      + ' [%(module)s..%(funcName)s..%(lineno)d]'
+                                      + ' - %(message)s')
     else:
         logger.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     fh = logging.FileHandler(logfn)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
@@ -266,6 +273,8 @@ def Main(args):
     pArgs = ParseCommandLine(args)
     mainLogger = SetLogger(logger_name=pArgs.logName, dbg_lvl=pArgs.debug)
 
+    if not os.path.exists(pArgs.ifile):
+        sys.exit('\n %s not found!\n exiting...' % pArgs.ifile)
     if pArgs.batch:
         mainLogger.info('Initializing batch processor')
         bcr = CBatchManager(pArgs)
