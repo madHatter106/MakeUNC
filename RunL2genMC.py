@@ -108,7 +108,7 @@ class CMCRunner(L2genRunner):
             os.makedirs(self.l2NoiPath)
         self.basename = basename
 
-    def GetCmdList(self):
+    def BuildCmdGen(self):
         '''Generator: generates cmdList for subprocess calls'''
         cmdBase = 'l2gen ifile=%s ofile=' % self.l1path
         if os.path.exists(self.l2SilFname):
@@ -196,11 +196,11 @@ class CBatchManager():
             mcr = CMCRunner(self.pArgs)
             pickle.dump(mcr, open(os.path.join(mcr.l2MainPath, 'mcr_%s.pkl'
                                                % mcr.basename), 'wb'))
-            cmdGen = mcr.GetCmdList()
+            cmdGen = mcr.BuildCmdGen()
             status = mcr.Runner(cmdGen)
             if status:
                 if self.verbose:
-                    print('\r%s: Finished processing %s' % (dt.now(), ifile),
+                    print('\r%s: Finished processing %s' % (DT.now(), ifile),
                           end='', flush=True)
                     with open(self.logMeta, 'a') as fmeta:
                         print('Finished processing %s' % ifile, file=fmeta)
@@ -283,7 +283,7 @@ def Main(args):
         mainLogger.info('Init MCRUnner Object w/ pArgs')
         mcr = CMCRunner(pArgs, mainLogger.name)
         mainLogger.info('Creating task list')
-        taskList = mcr.GetCmdList()
+        taskList = mcr.BuildCmdGen()
         mainLogger.info('Feeding tasklist l2gen runner')
         mcr.Runner(taskList)
 
