@@ -10,7 +10,7 @@ import sys
 import multiprocessing as mp
 import argparse
 from itertools import islice
-from datetime import datetime as dt
+from datetime import datetime as DT
 
 __author__ = "Erdem K."
 __version__ = "0.5"
@@ -143,7 +143,7 @@ class CMCRunner(L2genRunner):
                 if self.debug:
                     if process.stderr:
                         for line in process.stderr.readlines():
-                            self.logger.debug('%d %s' %(i, line))
+                            self.logger.debug('%d %s' % (i, line))
                 if process.poll() is not None:  # process has finished
                     runningProcs[i] = next(processes, None)  # start new ps
                     if runningProcs[i] is None:  # no new processes
