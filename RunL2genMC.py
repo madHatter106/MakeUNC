@@ -181,12 +181,12 @@ class CBatchManager():
             if parent_logger_name is not None:
                 self._SetLogger(parent_logger_name)
 
-    def _SetLogger(self, pln):
+    def _SetLogger(self, parentloggername):
         '''
         The user is expected to set the logger in the 'main' module and
         pass on its name to this child logger. Otherwise no logging will occurr.
         '''
-        self.logger = logging.getLogger('%s.RunL2genMC.CMCRunner' % pln)
+        self.logger = logging.getLogger('%s.RunL2genMC.CMCRunner' % parentloggername)
         self.logger.info('logger initialized')
 
     def ProcessL1A(self):
@@ -214,10 +214,11 @@ class CBatchManager():
 
 # TODO def ConsolidateParfile()
 
-def SetLogger(logger_name, dbg_lvl=False):
+def SetLogger(dbg_lvl=False):
     '''
 
     '''
+    logger_name = 'RL2MC_%s' % DT.strftime(DT.now(), '%Y-%m-%dT%H:%M:%S')
     logfn = '%s.log' % logger_name
     logger = logging.getLogger(logger_name)
     if dbg_lvl:
@@ -259,8 +260,6 @@ def ParseCommandLine(args):
                         type=int, default=1)
     parser.add_argument('-d', '--debug', help='increase output verbosity',
                         action='store_true', default=False)
-    parser.add_argument('--logName', help='logger name',
-                        type=str, default='CallMCLog')
     parser.add_argument('-b', '--batch', help='batch processing',
                         action='store_true')
     parsedArgs = parser.parse_args(args)
@@ -271,7 +270,7 @@ def ParseCommandLine(args):
 def Main(args):
 
     pArgs = ParseCommandLine(args)
-    mainLogger = SetLogger(logger_name=pArgs.logName, dbg_lvl=pArgs.debug)
+    mainLogger = SetLogger(dbg_lvl=pArgs.debug)
 
     if not os.path.exists(pArgs.ifile):
         sys.exit('\n %s not found!\n exiting...' % pArgs.ifile)
