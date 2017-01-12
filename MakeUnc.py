@@ -13,7 +13,6 @@ import os
 import re
 import argparse
 import logging
-import datetime as dt
 import multiprocessing as mp
 import pickle
 import shutil
